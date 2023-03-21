@@ -1,0 +1,101 @@
+﻿@page "/"
+
+<h3>Code Editor</h3>
+
+<div>
+    <div style="margin:10px 0;">
+        Theme:
+        <select @onchange="ChangeTheme">
+            <option value="vs">Visual Studio</option>
+            <option value="vs-dark">Visual Studio Dark</option>
+            <option value="hc-black">High Contrast Black</option>
+        </select>
+    </div>
+    <div style="margin:10px 0;">
+        Language:
+        <select @onchange="ChangeLanguage">
+            <option value="python">Python</option>
+            <option value="c">C</option>
+            <option value="cpp">C++</option>
+            <option value="csharp">C#</option>
+            <option value="java">Java</option>
+            <option value="javascript">JavaScript</option>
+            <option value="html">Html</option>
+        </select>
+    </div>
+    <div style="margin:10px 0;">
+        <button @onclick="GetValue">Get Value</button>
+    </div>
+</div>
+
+<StandaloneCodeEditor @ref="editor" CssClass="my-editor-class" ConstructionOptions="EditorConstructionOptions" OnDidInit="EditorOnDidInit" OnContextMenu="OnContextMenu" />
+
+<div>
+    @text
+</div>
+
+@code {
+    private StandaloneCodeEditor editor = null;
+
+    private string? text = "";
+
+    private StandaloneEditorConstructionOptions EditorConstructionOptions(StandaloneCodeEditor editor)
+    {
+        return new StandaloneEditorConstructionOptions {
+                Language = "python",
+                GlyphMargin = true,
+                Value = ""
+            };
+    }
+
+    private async Task EditorOnDidInit()
+    {
+        await editor.AddCommand((int)KeyMod.CtrlCmd | (int)KeyCode.KeyH | (int)KeyCode.Shift, (args) =>
+        {
+            Console.WriteLine("Ctrl+Shift+H : Initial editor command is triggered.");
+        }, "console.writeline");
+
+        var newDecorations = new ModelDeltaDecoration[]
+        {
+            new ModelDeltaDecoration
+            {
+                Range = new BlazorMonaco.Range(3,1,3,1),
+                Options = new ModelDecorationOptions
+                {
+                    IsWholeLine = true,
+                    ClassName = "decorationContentClass",
+                    GlyphMarginClassName = "decorationGlyphMarginClass"
+                }
+            }
+        };
+
+        decorationIds = await editor.DeltaDecorations(null, newDecorations);
+    }
+
+    private string[] decorationIds = new string[0];
+
+    private void OnContextMenu(EditorMouseEvent eventArg)
+    {
+        Console.WriteLine("OnContextMenu : " + System.Text.Json.JsonSerializer.Serialize(eventArg));
+    }
+
+    private async Task ChangeTheme(ChangeEventArgs e)
+    {
+        Console.WriteLine($"setting theme to: {e.Value?.ToString()}");
+        await Global.SetTheme(e.Value?.ToString());
+    }
+
+    private async Task ChangeLanguage(ChangeEventArgs e)
+    {
+        Console.WriteLine($"setting language to: {e.Value?.ToString()}");
+        var model = await editor.GetModel();
+        await Global.SetModelLanguage(model, e.Value?.ToString());
+    }
+
+    private async Task GetValue()
+    {
+        var val = await editor.GetValue();
+        Console.WriteLine($"value is: {val}");
+        text = val;
+    }
+}
