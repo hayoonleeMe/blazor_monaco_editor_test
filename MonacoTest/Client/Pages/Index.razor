@@ -1,7 +1,10 @@
 ﻿@page "/"
+@inject HttpClient Http
+@using MonacoTest.Shared
+@using System.Text
+@using System.Text.Json
 
-<h3>Code Editor</h3>
-
+<!--코드 에디터를 변경시키는 드롭다운 메뉴-->
 <div>
     <div style="margin:10px 0;">
         Theme:
@@ -14,6 +17,7 @@
     <div style="margin:10px 0;">
         Language:
         <select @onchange="ChangeLanguage">
+            <!--TODO : Language 옵션 추가-->
             <option value="python">Python</option>
             <option value="c">C</option>
             <option value="cpp">C++</option>
@@ -23,79 +27,236 @@
             <option value="html">Html</option>
         </select>
     </div>
-    <div style="margin:10px 0;">
-        <button @onclick="GetValue">Get Value</button>
-    </div>
 </div>
 
+<!--Monaco Editor 컴포넌트 생성-->
 <StandaloneCodeEditor @ref="editor" CssClass="my-editor-class" ConstructionOptions="EditorConstructionOptions" OnDidInit="EditorOnDidInit" OnContextMenu="OnContextMenu" />
 
 <div>
-    @text
+    <button class ="btn btn-primary" @onclick="RunCode">Run Code</button>
 </div>
 
+<!--Monaco Editor css 설정-->
+<style>
+    .my-editor-class {
+        height: 500px;
+        width: 100%;
+        border: 1px solid black;
+    }
+
+    .keyword {
+        color: #d73a49; /* red */
+        font-weight: bold;
+    }
+
+    .variable {
+        color: #6f42c1; /* purple */
+    }
+
+    .function {
+        color: #005cc5; /* blue */
+    }
+
+    .class {
+        color: #22863a; /* green */
+    }
+</style>
+
 @code {
-    private StandaloneCodeEditor editor = null;
+    private async Task RunCode() {
+        JudgeRequest judgeRequest = new JudgeRequest();
+        judgeRequest.Code = await editor.GetValue();
+        var model = await editor.GetModel();
+        var language = await model.GetLanguageId();
+        // id to string 변환 필요
+        judgeRequest.Language = language;
+        judgeRequest.TaskId = "123";
 
-    private string? text = "";
+        var content = new StringContent(JsonSerializer.Serialize(judgeRequest), Encoding.UTF8, "application/json");
+        var response = await Http.PostAsync("RunCode", content);
 
-    private StandaloneEditorConstructionOptions EditorConstructionOptions(StandaloneCodeEditor editor)
-    {
-        return new StandaloneEditorConstructionOptions {
-                Language = "python",
-                GlyphMargin = true,
-                Value = ""
-            };
-    }
+        if (response.IsSuccessStatusCode) {
+            Console.WriteLine("Data posted successfully");
 
-    private async Task EditorOnDidInit()
-    {
-        await editor.AddCommand((int)KeyMod.CtrlCmd | (int)KeyCode.KeyH | (int)KeyCode.Shift, (args) =>
-        {
-            Console.WriteLine("Ctrl+Shift+H : Initial editor command is triggered.");
-        }, "console.writeline");
-
-        var newDecorations = new ModelDeltaDecoration[]
-        {
-            new ModelDeltaDecoration
-            {
-                Range = new BlazorMonaco.Range(3,1,3,1),
-                Options = new ModelDecorationOptions
-                {
-                    IsWholeLine = true,
-                    ClassName = "decorationContentClass",
-                    GlyphMarginClassName = "decorationGlyphMarginClass"
-                }
+            JudgeResult? judgeResult = await response.Content.ReadFromJsonAsync<JudgeResult>();
+            if (judgeResult != null) {
+                Console.WriteLine("IsCorrect : " + (judgeResult.IsCorrect ? "true" : "false"));
+                Console.WriteLine("ExecutionTime (ms) : " + judgeResult.ExecutionTime);
+                Console.WriteLine("MemoryUsage (KB) : " + judgeResult.MemoryUsage);
+            } else {
+                Console.WriteLine("Result is null");
             }
-        };
-
-        decorationIds = await editor.DeltaDecorations(null, newDecorations);
+        } else {
+            Console.WriteLine("Failed to post data");
+        }
     }
 
+    // monaco editor 참조 변수
+    private StandaloneCodeEditor editor = null;
     private string[] decorationIds = new string[0];
 
-    private void OnContextMenu(EditorMouseEvent eventArg)
-    {
+    // monaco editor의 Construction 옵션을 정의하여 반환한다.
+    private StandaloneEditorConstructionOptions EditorConstructionOptions(StandaloneCodeEditor editor) {
+        // TODO : 추후 사양에 따라 에디터 옵션 수정 필요
+        return new StandaloneEditorConstructionOptions {
+                Language = "cpp",
+                GlyphMargin = true,
+                Value = @"#pragma region Laplacian Sobel Filters
+
+Mat LaplacianFilter(Mat img, int level){
+
+    namedWindow(""Original image"", CV_WINDOW_AUTOSIZE);
+    imshow(""Original image"", img);
+
+    Mat gray,draw,draw2;
+
+    cvtColor(img, gray, CV_RGB2GRAY);
+
+    /// Apply Laplace function
+    Laplacian(gray, draw, CV_16S, 3, 1, 0, BORDER_DEFAULT);
+    convertScaleAbs(draw, draw2);
+
+    imwrite(""../../result.jpg"", draw2);
+    namedWindow(""Result image"", CV_WINDOW_AUTOSIZE);
+    imshow(""Result image"", draw2);
+    waitKey(0);
+
+    destroyWindow(""Result image"");
+    destroyWindow(""Original image"");
+
+    return draw;
+}
+
+Mat SobelFilter(Mat img, int level){
+
+    namedWindow(""Original image"", CV_WINDOW_AUTOSIZE);
+    imshow(""Original image"", img);
+
+    Mat grey;
+    cvtColor(img, grey, CV_BGR2GRAY);
+
+    Mat sobelx;
+    Sobel(grey, sobelx, CV_32F, 1, 0);
+
+    double minVal, maxVal;
+    minMaxLoc(sobelx, &minVal, &maxVal); //find minimum and maximum intensities
+    cout << ""minVal : "" << minVal << endl << ""maxVal : "" << maxVal << endl;
+
+    Mat draw;
+    sobelx.convertTo(draw, CV_8U, 255.0 / (maxVal - minVal), -minVal * 255.0 / (maxVal - minVal));
+
+    imwrite(""../../result.jpg"", draw);
+    namedWindow(""Result image"", CV_WINDOW_AUTOSIZE);
+    imshow(""Result image"", draw);
+    waitKey(0);
+
+    destroyWindow(""Result image"");
+    destroyWindow(""Original image"");
+
+    return draw;
+}
+
+#pragma endregion"
+        };
+    }
+
+    // didInitEditor 이벤트가 발생할 때 호출된다.
+    private async Task EditorOnDidInit() {
+        // 코드에 시각효과를 주는 Decoration을 정의한다.
+        // TODO : 추후 사양에 따라 옵션 수정 필요
+        var newDecorations = new ModelDeltaDecoration[] {
+            new ModelDeltaDecoration {
+                Range = new BlazorMonaco.Range(3, 1, 3, 1),
+                    Options = new ModelDecorationOptions {
+                    IsWholeLine = true,
+                    ClassName = "decorationContentClass",
+                    GlyphMarginClassName = "decorationGlyphMarginClass", 
+                }       
+            }
+    };
+
+        // 정의한 Decoration을 에디터에 적용한다.
+        decorationIds = await editor.DeltaDecorations(null, newDecorations);
+
+        //// decorationIds 배열에 저장된 이전 Decoration을 삭제한다.
+        //await editor.DeltaDecorations(decorationIds, new ModelDeltaDecoration[] { });
+
+        //// Editor에서 사용될 키워드와 타입, 함수, 변수 등의 스타일을 정의한다.
+        //// 이 예시에서는 변수를 초록색, 키워드를 파란색, 함수를 청록색으로 스타일링한다.
+        //var decorations = new List<ModelDeltaDecoration>();
+        //var model = await editor.GetModel();
+        //if (model != null) {
+        //    string text = await model.GetValue(EndOfLinePreference.TextDefined, true);
+
+        //    var keywordRegex = new Regex("\\b(int|double|float|char|void|if|else|for|while|do|return)\\b");
+        //    var matches = keywordRegex.Matches(text);
+        //    foreach (Match match in matches) {
+        //        decorations.Add(new ModelDeltaDecoration {
+        //                Range = new BlazorMonaco.Range(
+        //                    model.GetPositionAt(match.Index).Result.LineNumber,
+        //                    model.GetPositionAt(match.Index).Result.Column,
+        //                    model.GetPositionAt(match.Index + match.Length).Result.LineNumber,
+        //                    model.GetPositionAt(match.Index + match.Length).Result.Column
+        //                ),
+        //                Options = new ModelDecorationOptions {
+        //                    InlineClassName = "keyword"
+        //                }
+        //            });
+        //    }
+
+        //    var variableRegex = new Regex("\\b([a-zA-Z_][a-zA-Z0-9_]*)\\b");
+        //    matches = variableRegex.Matches(text);
+        //    foreach (Match match in matches) {
+        //        decorations.Add(new ModelDeltaDecoration {
+        //                Range = new BlazorMonaco.Range(
+        //                    model.GetPositionAt(match.Index).Result.LineNumber,
+        //                    model.GetPositionAt(match.Index).Result.Column,
+        //                    model.GetPositionAt(match.Index + match.Length).Result.LineNumber,
+        //                    model.GetPositionAt(match.Index + match.Length).Result.Column
+        //                ),
+        //                Options = new ModelDecorationOptions {
+        //                    InlineClassName = "variable"
+        //                }
+        //            });
+        //    }
+
+        //    var functionRegex = new Regex("\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\(");
+        //    matches = functionRegex.Matches(text);
+        //    foreach (Match match in matches) {
+        //        decorations.Add(new ModelDeltaDecoration {
+        //                Range = new BlazorMonaco.Range(
+        //                    model.GetPositionAt(match.Index).Result.LineNumber,
+        //                    model.GetPositionAt(match.Index).Result.Column,
+        //                    model.GetPositionAt(match.Index + match.Length - 1).Result.LineNumber,
+        //                    model.GetPositionAt(match.Index + match.Length - 1).Result.Column
+        //                ),
+        //                Options = new ModelDecorationOptions {
+        //                    InlineClassName = "function"
+        //                }
+        //            });
+        //    }
+
+        //    var classRegex = new Regex("\\b(class)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\b");
+        //}
+
+        //decorationIds = await editor.DeltaDecorations(null, decorations.ToArray());
+    }
+
+    // 에디터에 우클릭 시 수행할 로직을 정의한다.
+    private void OnContextMenu(EditorMouseEvent eventArg) {
         Console.WriteLine("OnContextMenu : " + System.Text.Json.JsonSerializer.Serialize(eventArg));
     }
 
-    private async Task ChangeTheme(ChangeEventArgs e)
-    {
-        Console.WriteLine($"setting theme to: {e.Value?.ToString()}");
+    // Theme Select를 변경했을 때 호출된다.
+    // 선택한 옵션에 따라 에디터의 Theme을 변경한다.
+    private async Task ChangeTheme(ChangeEventArgs e) {
         await Global.SetTheme(e.Value?.ToString());
     }
 
-    private async Task ChangeLanguage(ChangeEventArgs e)
-    {
-        Console.WriteLine($"setting language to: {e.Value?.ToString()}");
+    // Language Select를 변경했을 때 호출된다.
+    // 선택한 옵션에 따라 에디터의 Language를 변경한다.
+    private async Task ChangeLanguage(ChangeEventArgs e) {
         var model = await editor.GetModel();
         await Global.SetModelLanguage(model, e.Value?.ToString());
     }
-
-    private async Task GetValue()
-    {
-        var val = await editor.GetValue();
-        Console.WriteLine($"value is: {val}");
-        text = val;
-    }
-}
+}   
