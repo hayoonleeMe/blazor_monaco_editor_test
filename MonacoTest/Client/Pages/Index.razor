@@ -18,11 +18,11 @@
         Language:
         <select @onchange="ChangeLanguage">
             <!--TODO : Language 옵션 추가-->
-            <option value="python">Python</option>
             <option value="c">C</option>
             <option value="cpp">C++</option>
             <option value="csharp">C#</option>
             <option value="java">Java</option>
+            <option value="python">Python</option>
             <option value="javascript">JavaScript</option>
             <option value="html">Html</option>
         </select>
@@ -33,7 +33,7 @@
 <StandaloneCodeEditor @ref="editor" CssClass="my-editor-class" ConstructionOptions="EditorConstructionOptions" OnDidInit="EditorOnDidInit" OnContextMenu="OnContextMenu" />
 
 <div>
-    <button class ="btn btn-primary" @onclick="RunCode">Run Code</button>
+    <button class ="btn btn-primary" @onclick="JudgeCode">Run Code</button>
 </div>
 
 <!--Monaco Editor css 설정-->
@@ -63,14 +63,12 @@
 </style>
 
 @code {
-    private async Task RunCode() {
+    private async Task JudgeCode() {
         JudgeRequest judgeRequest = new JudgeRequest();
         judgeRequest.Code = await editor.GetValue();
         var model = await editor.GetModel();
         var language = await model.GetLanguageId();
-        // id to string 변환 필요
-        judgeRequest.Language = language;
-        judgeRequest.TaskId = "123";
+        judgeRequest.Id = "123";
 
         var content = new StringContent(JsonSerializer.Serialize(judgeRequest), Encoding.UTF8, "application/json");
         var response = await Http.PostAsync("RunCode", content);
@@ -80,9 +78,40 @@
 
             JudgeResult? judgeResult = await response.Content.ReadFromJsonAsync<JudgeResult>();
             if (judgeResult != null) {
-                Console.WriteLine("IsCorrect : " + (judgeResult.IsCorrect ? "true" : "false"));
-                Console.WriteLine("ExecutionTime (ms) : " + judgeResult.ExecutionTime);
-                Console.WriteLine("MemoryUsage (KB) : " + judgeResult.MemoryUsage);
+                switch (judgeResult.Result) {
+                    case JudgeResult.JResult.Accepted:
+                        Console.WriteLine("맞았습니다.");
+                        Console.WriteLine("실행 시간(ms) : " + judgeResult.ExecutionTime);
+                        Console.WriteLine("메모리 사용량(KB) : " + judgeResult.MemoryUsage);
+                        break;
+                    case JudgeResult.JResult.WrongAnswer:
+                        Console.WriteLine("틀렸습니다.");
+                        break;
+                    case JudgeResult.JResult.CompileError:
+                        Console.WriteLine("컴파일 에러");
+                        break;
+                    case JudgeResult.JResult.RuntimeError:
+                        Console.WriteLine("런타임 에러");
+                        break;
+                    case JudgeResult.JResult.TimeLimitExceeded:
+                        Console.WriteLine("시간 초과");
+                        break;
+                    case JudgeResult.JResult.MemoryLimitExceeded:
+                        Console.WriteLine("메모리 초과");
+                        break;
+                    case JudgeResult.JResult.PresentationError:
+                        Console.WriteLine("출력 형식 에러");
+                        break;
+                    case JudgeResult.JResult.OutputLimitExceeded:
+                        Console.WriteLine("출력 한도 초과");
+                        break;
+                    case JudgeResult.JResult.JudgementFailed:
+                        Console.WriteLine("채점 실패");
+                        break;
+                    case JudgeResult.JResult.Pending:
+                        Console.WriteLine("채점 미완료");
+                        break;
+                }
             } else {
                 Console.WriteLine("Result is null");
             }
@@ -99,64 +128,9 @@
     private StandaloneEditorConstructionOptions EditorConstructionOptions(StandaloneCodeEditor editor) {
         // TODO : 추후 사양에 따라 에디터 옵션 수정 필요
         return new StandaloneEditorConstructionOptions {
-                Language = "cpp",
+                Language = "c",
                 GlyphMargin = true,
-                Value = @"#pragma region Laplacian Sobel Filters
-
-Mat LaplacianFilter(Mat img, int level){
-
-    namedWindow(""Original image"", CV_WINDOW_AUTOSIZE);
-    imshow(""Original image"", img);
-
-    Mat gray,draw,draw2;
-
-    cvtColor(img, gray, CV_RGB2GRAY);
-
-    /// Apply Laplace function
-    Laplacian(gray, draw, CV_16S, 3, 1, 0, BORDER_DEFAULT);
-    convertScaleAbs(draw, draw2);
-
-    imwrite(""../../result.jpg"", draw2);
-    namedWindow(""Result image"", CV_WINDOW_AUTOSIZE);
-    imshow(""Result image"", draw2);
-    waitKey(0);
-
-    destroyWindow(""Result image"");
-    destroyWindow(""Original image"");
-
-    return draw;
-}
-
-Mat SobelFilter(Mat img, int level){
-
-    namedWindow(""Original image"", CV_WINDOW_AUTOSIZE);
-    imshow(""Original image"", img);
-
-    Mat grey;
-    cvtColor(img, grey, CV_BGR2GRAY);
-
-    Mat sobelx;
-    Sobel(grey, sobelx, CV_32F, 1, 0);
-
-    double minVal, maxVal;
-    minMaxLoc(sobelx, &minVal, &maxVal); //find minimum and maximum intensities
-    cout << ""minVal : "" << minVal << endl << ""maxVal : "" << maxVal << endl;
-
-    Mat draw;
-    sobelx.convertTo(draw, CV_8U, 255.0 / (maxVal - minVal), -minVal * 255.0 / (maxVal - minVal));
-
-    imwrite(""../../result.jpg"", draw);
-    namedWindow(""Result image"", CV_WINDOW_AUTOSIZE);
-    imshow(""Result image"", draw);
-    waitKey(0);
-
-    destroyWindow(""Result image"");
-    destroyWindow(""Original image"");
-
-    return draw;
-}
-
-#pragma endregion"
+                Value = ""
         };
     }
 
